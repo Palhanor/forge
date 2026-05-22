@@ -6,6 +6,7 @@ import typer
 
 FORGE_JSON = "forge.json"
 SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+ENV_FILE_TRAVERSAL = re.compile(r"(^|[\\/])\.\.([\\/]|$)")
 
 RUNTIME_FRAMEWORKS: dict[str, set[str]] = {
     "python": {"script", "fastapi"},
@@ -34,10 +35,26 @@ def load_forge_json(project_root: Path) -> dict:
         typer.secho(f"✗ {FORGE_JSON} must be a JSON object", fg=typer.colors.RED)
         raise typer.Exit(code=1)
 
-    return validate_forge_manifest(data)
+    return validate_forge_manifest(data, project_root=project_root)
 
 
-def validate_forge_manifest(data: dict) -> dict:
+def _validate_env_file_field(env_file: str) -> list[str]:
+    errors: list[str] = []
+    if not env_file.strip():
+        errors.append("'envFile' must be a non-empty string when provided")
+        return errors
+    if env_file.startswith(("/", "\\")) or (
+        len(env_file) > 1 and env_file[1] == ":"
+    ):
+        errors.append("'envFile' must be a relative path")
+    elif "\\" in env_file:
+        errors.append("'envFile' must use forward slashes (relative path)")
+    elif ENV_FILE_TRAVERSAL.search(env_file):
+        errors.append("'envFile' must not contain '..' path segments")
+    return errors
+
+
+def validate_forge_manifest(data: dict, *, project_root: Path | None = None) -> dict:
     errors: list[str] = []
 
     name = data.get("name")
@@ -75,6 +92,21 @@ def validate_forge_manifest(data: dict) -> dict:
             errors.append(
                 "'subdomain' must be a slug (lowercase letters, numbers, hyphens)"
             )
+
+    env_file = data.get("envFile")
+    if env_file is not None:
+        if not isinstance(env_file, str):
+            errors.append("'envFile' must be a string when provided")
+        else:
+            env_file_errors = _validate_env_file_field(env_file)
+            errors.extend(env_file_errors)
+            if not env_file_errors and project_root is not None:
+                env_path = (project_root / env_file).resolve()
+                if not env_path.is_file():
+                    errors.append(
+                        f"'envFile' not found: {project_root / env_file} "
+                        "(create it locally before deploy, e.g. from .env.example)"
+                    )
 
     if errors:
         typer.secho(f"✗ Invalid {FORGE_JSON}:", fg=typer.colors.RED)

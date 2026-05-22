@@ -34,10 +34,14 @@ When self-hosting the Forge builder:
 5. **Deploy data** — `server/data/` may contain uploaded project archives and metadata; protect filesystem permissions and backups.
 6. **Authentication** — All builder API routes require `Authorization: Bearer <api_key>`. Use a long, random key in production.
 
+## Application environment variables (POC)
+
+When `envFile` is set in `forge.json`, the referenced file is packaged in the deploy archive and passed to the container at runtime (`docker run --env-file`). Treat these files as secrets: do not commit `.env` to git, and assume anyone with access to `server/data/` can read deployed values. This is not an encrypted secrets store.
+
 ## Out of scope for the current POC
 
 - Multi-tenant isolation
-- Encrypted secrets store for application environment variables
+- Encrypted secrets store for application environment variables (inline or managed secrets API)
 - Automated vulnerability scanning of user-uploaded code
 - Production-grade rate limiting and audit logging
 

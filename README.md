@@ -135,6 +135,7 @@ Cada projeto deployável precisa de um `forge.json` na raiz. A CLI valida o arqu
 | `start` | não | Comando de start (usado na Fase 2) |
 | `build` | não | Comando de build (Node/React/Next) |
 | `subdomain` | não | Subdomínio futuro (slug; default = `name`) |
+| `envFile` | não | Caminho relativo a um arquivo de env (ex.: `.env`) incluído no deploy e injetado no container via `docker run --env-file` |
 
 **`framework` por `runtime`:**
 
@@ -278,6 +279,10 @@ Convenção para Node.js:
 | `build` em `forge.json` | não | **TS:** default `npm run build`. **JS:** default `true` (sem build) |
 | `start` em `forge.json` | não | **TS:** default `node dist/index.js`. **JS:** default `node <main>` (`package.json` → `main` ou `index.js`) |
 | `port` em `forge.json` | não | Porta do container (default: `3000`; `PORT` no container) |
+| `envFile` em `forge.json` | não | Arquivo de variáveis para produção (ex.: `.env`); deve existir localmente antes do `forge deploy` |
+| `.env` | se `envFile` | Criar a partir de `.env.example` (`cp .env.example .env`); não versionado |
+
+Com `envFile: ".env"`, o endpoint `/ping` retorna `process.env.PING_MESSAGE` (ex.: `hello-from-forge`).
 
 ```http
 GET http://localhost:<host_port>/ping

@@ -16,3 +16,5 @@ def validate():
     typer.echo(f"  name: {manifest.get('name')}")
     typer.echo(f"  runtime: {manifest.get('runtime')}")
     typer.echo(f"  framework: {manifest.get('framework')}")
+    if manifest.get("envFile"):
+        typer.echo(f"  envFile: {manifest.get('envFile')}")

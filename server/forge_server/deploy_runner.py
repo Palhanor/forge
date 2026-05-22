@@ -8,6 +8,7 @@ from forge_server.docker_runner import (
     build_and_run_nodejs,
     build_and_run_react,
 )
+from forge_server.env_files import resolve_env_file
 from forge_server.extract import safe_extract_archive
 from forge_server.storage import update_deploy_status
 
@@ -36,6 +37,7 @@ def run_deploy(deploy_id: str, metadata: dict) -> dict:
 
     try:
         source_dir = safe_extract_archive(archive_path, deploy_dir)
+        env_file = resolve_env_file(source_dir, manifest)
 
         if framework == "fastapi":
             port = manifest.get("port") or DEFAULT_CONTAINER_PORT
@@ -47,6 +49,7 @@ def run_deploy(deploy_id: str, metadata: dict) -> dict:
                 source_dir=source_dir,
                 start_cmd=start_cmd,
                 container_port=int(port),
+                env_file=env_file,
             )
         elif framework == "react":
             port = manifest.get("port") or DEFAULT_REACT_PORT
@@ -56,6 +59,7 @@ def run_deploy(deploy_id: str, metadata: dict) -> dict:
                 source_dir=source_dir,
                 container_port=int(port),
                 build_cmd=build_cmd,
+                env_file=env_file,
             )
         else:
             port = manifest.get("port") or DEFAULT_NODEJS_PORT
@@ -64,6 +68,7 @@ def run_deploy(deploy_id: str, metadata: dict) -> dict:
                 source_dir=source_dir,
                 manifest=manifest,
                 container_port=int(port),
+                env_file=env_file,
             )
 
         updates = {

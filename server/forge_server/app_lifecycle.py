@@ -1,9 +1,11 @@
+from forge_server.config import DEPLOYMENTS_DIR
 from forge_server.docker_runner import (
     DEFAULT_CONTAINER_PORT,
     remove_container_and_image,
     start_container,
     stop_container,
 )
+from forge_server.env_files import resolve_env_file
 from forge_server.storage import (
     delete_app,
     get_app_by_name,
@@ -66,11 +68,18 @@ def start_app(name: str) -> dict:
     if not host_port:
         raise ValueError(f"App '{name}' has no host port recorded")
 
+    manifest = metadata.get("manifest") or {}
+    source_dir = DEPLOYMENTS_DIR / deploy_id / "source"
+    env_file = None
+    if source_dir.is_dir():
+        env_file = resolve_env_file(source_dir, manifest)
+
     runtime_info = start_container(
         name,
         image=image,
         host_port=int(host_port),
         container_port=int(container_port),
+        env_file=env_file,
     )
 
     updates = {

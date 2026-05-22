@@ -81,12 +81,35 @@ def stop_container(name: str) -> None:
         _run(["docker", "stop", container])
 
 
+def _docker_run_args(
+    container_name: str,
+    host_port: int,
+    container_port: int,
+    image: str,
+    env_file: Path | None = None,
+) -> list[str]:
+    cmd = [
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "-p",
+        f"{host_port}:{container_port}",
+    ]
+    if env_file is not None:
+        cmd.extend(["--env-file", str(env_file)])
+    cmd.append(image)
+    return cmd
+
+
 def start_container(
     name: str,
     *,
     image: str,
     host_port: int,
     container_port: int,
+    env_file: Path | None = None,
 ) -> dict:
     if shutil.which("docker") is None:
         raise RuntimeError("Docker is not installed or not in PATH")
@@ -107,16 +130,13 @@ def start_container(
             port_mapping = find_free_host_port()
 
     _run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
+        _docker_run_args(
             container,
-            "-p",
-            f"{port_mapping}:{container_port}",
+            port_mapping,
+            container_port,
             image,
-        ],
+            env_file,
+        ),
     )
     return _runtime_info(name, port_mapping, container_port)
 
@@ -197,6 +217,7 @@ def _docker_build_and_run(
     name: str,
     source_dir: Path,
     container_port: int,
+    env_file: Path | None = None,
 ) -> dict:
     image_tag = image_tag_for_name(name)
     stop_existing_container(name)
@@ -207,16 +228,13 @@ def _docker_build_and_run(
     container_name = _safe_container_name(name)
 
     _run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
+        _docker_run_args(
             container_name,
-            "-p",
-            f"{host_port}:{container_port}",
+            host_port,
+            container_port,
             image_tag,
-        ],
+            env_file,
+        ),
     )
 
     return _runtime_info(name, host_port, container_port)
@@ -228,13 +246,19 @@ def build_and_run(
     source_dir: Path,
     start_cmd: str,
     container_port: int = DEFAULT_CONTAINER_PORT,
+    env_file: Path | None = None,
 ) -> dict:
     if shutil.which("docker") is None:
         raise RuntimeError("Docker is not installed or not in PATH")
 
     ensure_requirements(source_dir)
     write_fastapi_dockerfile(source_dir, start_cmd)
-    return _docker_build_and_run(name=name, source_dir=source_dir, container_port=container_port)
+    return _docker_build_and_run(
+        name=name,
+        source_dir=source_dir,
+        container_port=container_port,
+        env_file=env_file,
+    )
 
 
 def build_and_run_react(
@@ -243,6 +267,7 @@ def build_and_run_react(
     source_dir: Path,
     container_port: int = DEFAULT_REACT_PORT,
     build_cmd: str = "npm run build",
+    env_file: Path | None = None,
 ) -> dict:
     if shutil.which("docker") is None:
         raise RuntimeError("Docker is not installed or not in PATH")
@@ -251,7 +276,12 @@ def build_and_run_react(
         raise RuntimeError("package.json is required for React deploys")
 
     write_react_dockerfile(source_dir, container_port, build_cmd)
-    return _docker_build_and_run(name=name, source_dir=source_dir, container_port=container_port)
+    return _docker_build_and_run(
+        name=name,
+        source_dir=source_dir,
+        container_port=container_port,
+        env_file=env_file,
+    )
 
 
 def build_and_run_nodejs(
@@ -260,6 +290,7 @@ def build_and_run_nodejs(
     source_dir: Path,
     manifest: dict,
     container_port: int = DEFAULT_NODEJS_PORT,
+    env_file: Path | None = None,
 ) -> dict:
     if shutil.which("docker") is None:
         raise RuntimeError("Docker is not installed or not in PATH")
@@ -277,4 +308,9 @@ def build_and_run_nodejs(
         build_cmd,
         runtime_copy,
     )
-    return _docker_build_and_run(name=name, source_dir=source_dir, container_port=container_port)
+    return _docker_build_and_run(
+        name=name,
+        source_dir=source_dir,
+        container_port=container_port,
+        env_file=env_file,
+    )
