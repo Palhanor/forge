@@ -1,0 +1,28 @@
+# secrets / local env
+.env
+.env.*
+!.env.example
+server/.env
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# node (se alguém rodar npm na raiz ou nos examples)
+node_modules/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+.cursor/
+
+# runtime do builder
+server/data/

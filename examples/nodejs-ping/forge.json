@@ -1,0 +1,6 @@
+{
+  "name": "nodejs-ping",
+  "runtime": "node",
+  "framework": "nodejs",
+  "port": 3000
+}

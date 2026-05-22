@@ -1,0 +1,7 @@
+{
+  "name": "react-example",
+  "runtime": "node",
+  "framework": "react",
+  "port": 3000,
+  "build": "npm run build"
+}

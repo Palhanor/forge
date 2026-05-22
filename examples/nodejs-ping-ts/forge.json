@@ -1,0 +1,6 @@
+{
+  "name": "nodejs-ping-ts",
+  "runtime": "node",
+  "framework": "nodejs",
+  "port": 3000
+}

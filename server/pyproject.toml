@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forge-server"
+version = "0.1.0"
+description = "Forge — Personal deploy platform builder API"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.12",
+]
+
+[project.scripts]
+forge-server = "forge_server.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["forge_server*"]
+
+[tool.setuptools.package-data]
+forge_server = ["templates/**/*"]
