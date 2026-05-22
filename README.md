@@ -136,6 +136,9 @@ Cada projeto deployável precisa de um `forge.json` na raiz. A CLI valida o arqu
 | `build` | não | Comando de build (Node/React/Next) |
 | `subdomain` | não | Subdomínio futuro (slug; default = `name`) |
 | `envFile` | não | Caminho relativo a um arquivo de env (ex.: `.env`) incluído no deploy e injetado no container via `docker run --env-file` |
+| `checks` | não | Lista de validações locais (lint, test, etc.) executadas na CLI antes do empacotamento; ver abaixo |
+
+**`checks` (CI/CD local):** array de objetos `{ "name": "<slug>", "run": "<comando shell>" }`, executados em ordem no diretório do projeto. Se algum check falhar, `forge deploy` e `forge validate` abortam antes do upload. Os comandos usam o ambiente local (venv, `node_modules`, etc.) — instale as dependências de test/lint antes do deploy. Use `--skip-checks` para pular.
 
 **`framework` por `runtime`:**
 
@@ -165,7 +168,10 @@ Python (FastAPI):
   "runtime": "python",
   "framework": "fastapi",
   "port": 8000,
-  "start": "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+  "start": "uvicorn app.main:app --host 0.0.0.0 --port 8000",
+  "checks": [
+    { "name": "test", "run": "pytest -q" }
+  ]
 }
 ```
 
@@ -189,9 +195,11 @@ Node (Next.js):
 |---------|-----------|
 | `forge setup` | Configura `host` e `api_key` em `~/.forge/config.json` |
 | `forge version` | Versão da CLI |
-| `forge validate` | Valida `forge.json` no diretório atual |
+| `forge validate` | Valida `forge.json` no diretório atual (e roda `checks`, se definidos) |
+| `forge validate --skip-checks` | Valida só o manifesto, sem executar `checks` |
 | `forge ping` | Verifica conectividade com o builder (autenticado) |
-| `forge deploy` | Valida `forge.json`, empacota e envia para `{host}/deploy` |
+| `forge deploy` | Valida `forge.json`, roda `checks`, empacota e envia para `{host}/deploy` |
+| `forge deploy --skip-checks` | Deploy sem executar `checks` |
 | `forge deploy -n outro-nome` | Sobrescreve o `name` do `forge.json` |
 | `forge list` | Lista apps via `GET {host}/apps` |
 | `forge stop <name>` | Para o container (status `stopped`; dados e imagem permanecem) |
@@ -224,6 +232,7 @@ Projeto de exemplo em [`examples/fastapi-ping/`](examples/fastapi-ping/):
 
 - `app/main.py` com `GET /ping`
 - `forge.json` + `requirements.txt`
+- `tests/test_ping.py` com pytest (check `test` no `forge.json`)
 
 Convenção para FastAPI:
 
@@ -233,6 +242,19 @@ Convenção para FastAPI:
 | `requirements.txt` | recomendado | Se ausente, o builder gera um mínimo com `fastapi` e `uvicorn` |
 | `app/main.py` | sim* | App FastAPI (`app` exportado como `app`) |
 | `start` em `forge.json` | não | Default: `uvicorn app.main:app --host 0.0.0.0 --port <port>` |
+| `checks` em `forge.json` | não | Ex.: `[{"name": "test", "run": "pytest -q"}]` — roda antes do deploy |
+
+Setup local e deploy com checks:
+
+```bash
+cd examples/fastapi-ping
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+forge validate   # manifesto + pytest
+forge deploy
+```
+
+Para ver o deploy bloqueado por teste falhando: altere temporariamente o assert em `tests/test_ping.py` (ex.: espere `"wrong"` em vez de `"pong"`), rode `forge deploy` (aborta antes do upload), corrija o teste e rode `forge deploy` de novo.
 
 Após `forge deploy`, o container expõe uma porta no host (18000–18999). Teste no Postman:
 

@@ -4,6 +4,7 @@ from pathlib import Path
 import typer
 
 from forge_cli.archive import create_project_archive
+from forge_cli.checks import run_checks
 from forge_cli.client import (
     DEPLOY_PATH,
     builder_post,
@@ -22,12 +23,23 @@ def deploy(
         "-n",
         help="Override app name from forge.json.",
     ),
+    skip_checks: bool = typer.Option(
+        False,
+        "--skip-checks",
+        help="Skip pre-deploy checks declared in forge.json.",
+    ),
 ):
     """Package the current project as .tar.gz and upload it to the Forge builder."""
     project_root = Path.cwd()
     manifest = load_forge_json(project_root)
     app_name = name or manifest["name"]
     host = get_builder_host()
+
+    if checks := manifest.get("checks"):
+        if skip_checks:
+            typer.echo("Skipping pre-deploy checks (--skip-checks).")
+        else:
+            run_checks(project_root, checks)
 
     typer.echo(f"Packaging {project_root}...")
     archive_path = None

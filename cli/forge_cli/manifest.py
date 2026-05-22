@@ -38,6 +38,43 @@ def load_forge_json(project_root: Path) -> dict:
     return validate_forge_manifest(data, project_root=project_root)
 
 
+def _validate_checks_field(checks: object) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(checks, list):
+        errors.append("'checks' must be an array when provided")
+        return errors
+    if not checks:
+        errors.append("'checks' must be a non-empty array when provided")
+        return errors
+
+    seen_names: set[str] = set()
+    for index, item in enumerate(checks):
+        prefix = f"'checks[{index}]'"
+        if not isinstance(item, dict):
+            errors.append(f"{prefix} must be an object with 'name' and 'run'")
+            continue
+
+        check_name = item.get("name")
+        if not isinstance(check_name, str) or not check_name.strip():
+            errors.append(f"{prefix}.name is required (non-empty string)")
+        elif not SLUG_PATTERN.match(check_name.strip()):
+            errors.append(
+                f"{prefix}.name must be a slug (lowercase letters, numbers, hyphens)"
+            )
+        else:
+            normalized = check_name.strip()
+            if normalized in seen_names:
+                errors.append(f"{prefix}.name '{normalized}' is duplicated")
+            else:
+                seen_names.add(normalized)
+
+        run_cmd = item.get("run")
+        if not isinstance(run_cmd, str) or not run_cmd.strip():
+            errors.append(f"{prefix}.run is required (non-empty string)")
+
+    return errors
+
+
 def _validate_env_file_field(env_file: str) -> list[str]:
     errors: list[str] = []
     if not env_file.strip():
@@ -107,6 +144,10 @@ def validate_forge_manifest(data: dict, *, project_root: Path | None = None) -> 
                         f"'envFile' not found: {project_root / env_file} "
                         "(create it locally before deploy, e.g. from .env.example)"
                     )
+
+    checks = data.get("checks")
+    if checks is not None:
+        errors.extend(_validate_checks_field(checks))
 
     if errors:
         typer.secho(f"✗ Invalid {FORGE_JSON}:", fg=typer.colors.RED)
