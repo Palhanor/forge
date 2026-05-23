@@ -85,6 +85,8 @@ def save_deploy(
         entry["framework"] = manifest.get("framework")
         if manifest.get("subdomain"):
             entry["subdomain"] = manifest["subdomain"]
+        if manifest.get("database"):
+            entry["database"] = True
     apps.append(entry)
     _save_registry(apps)
 

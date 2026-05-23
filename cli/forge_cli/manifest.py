@@ -149,6 +149,18 @@ def validate_forge_manifest(data: dict, *, project_root: Path | None = None) -> 
     if checks is not None:
         errors.extend(_validate_checks_field(checks))
 
+    database = data.get("database")
+    if database is not None:
+        if not isinstance(database, bool):
+            errors.append("'database' must be a boolean when provided")
+        elif database is True:
+            framework = data.get("framework")
+            if isinstance(framework, str) and framework in ("react", "next"):
+                errors.append(
+                    f"'database' is not supported for framework '{framework}'. "
+                    "Use fastapi or nodejs."
+                )
+
     if errors:
         typer.secho(f"✗ Invalid {FORGE_JSON}:", fg=typer.colors.RED)
         for err in errors:

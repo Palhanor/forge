@@ -138,6 +138,7 @@ Cada projeto deployável precisa de um `forge.json` na raiz. A CLI valida o arqu
 | `build` | não | Comando de build (Node/React/Next) |
 | `subdomain` | não | Subdomínio futuro (slug; default = `name`) |
 | `envFile` | não | Caminho relativo a um arquivo de env (ex.: `.env`) incluído no deploy e injetado no container via `docker run --env-file` |
+| `database` | não | Se `true`, o Forge provisiona Postgres dedicado ao app, injeta `DATABASE_URL` e anexa o container à rede `forge-net` (requer stack Compose com `forge-postgres`) |
 | `checks` | não | Lista de validações locais (lint, test, etc.) executadas na CLI antes do empacotamento; ver abaixo |
 
 **`checks` (CI/CD local):** array de objetos `{ "name": "<slug>", "run": "<comando shell>" }`, executados em ordem no diretório do projeto. Se algum check falhar, `forge deploy` e `forge validate` abortam antes do upload. Os comandos usam o ambiente local (venv, `node_modules`, etc.) — instale as dependências de test/lint antes do deploy. Use `--skip-checks` para pular.
@@ -170,12 +171,15 @@ Python (FastAPI):
   "runtime": "python",
   "framework": "fastapi",
   "port": 8000,
+  "database": true,
   "start": "uvicorn app.main:app --host 0.0.0.0 --port 8000",
   "checks": [
     { "name": "test", "run": "pytest -q" }
   ]
 }
 ```
+
+Com `"database": true`, o app recebe `DATABASE_URL` apontando para o Postgres do Forge (`forge-postgres` na rede interna). Não use com `react`/`next`.
 
 Node (Next.js):
 
@@ -236,7 +240,7 @@ O builder roda em um container com o socket do Docker montado e orquestra os app
 
 ```bash
 cp server/.env.example server/.env
-# Edite server/.env: FORGE_API_KEY e, no Linux, DOCKER_GID (ver abaixo)
+# Edite server/.env: FORGE_API_KEY, FORGE_POSTGRES_PASSWORD e, no Linux, DOCKER_GID (ver abaixo)
 
 make builder-up
 # ou: docker compose up -d --build
@@ -250,6 +254,14 @@ forge ping
 ```
 
 Dados persistentes do builder: volume Docker `forge-data` em `/var/lib/forge/data` (`FORGE_DATA_DIR`).
+
+**Postgres (Forge database):** o serviço `forge-postgres` sobe junto com o builder. Configure em `server/.env`:
+
+- `FORGE_POSTGRES_USER` (default `forge`)
+- `FORGE_POSTGRES_PASSWORD` (obrigatório)
+- `FORGE_POSTGRES_DB` (default `forge`)
+
+Dados do Postgres ficam no volume `forge-postgres-data`. Apps com `"database": true` rodam na rede `forge-net` e conectam em `forge-postgres:5432`. O `forge delete` remove também o database/usuário dedicados ao app.
 
 | Comando | Descrição |
 |---------|-----------|
@@ -280,8 +292,8 @@ A CLI continua rodando na sua máquina; só o builder fica na VPS.
 
 Projeto de exemplo em [`examples/fastapi-ping/`](examples/fastapi-ping/):
 
-- `app/main.py` com `GET /ping`
-- `forge.json` + `requirements.txt`
+- `app/main.py` com `GET /ping` e `GET /db-ping` (testa Postgres quando `"database": true`)
+- `forge.json` com `"database": true` + `requirements.txt`
 - `tests/test_ping.py` com pytest (check `test` no `forge.json`)
 
 Convenção para FastAPI:
@@ -306,11 +318,14 @@ forge deploy
 
 Para ver o deploy bloqueado por teste falhando: altere temporariamente o assert em `tests/test_ping.py` (ex.: espere `"wrong"` em vez de `"pong"`), rode `forge deploy` (aborta antes do upload), corrija o teste e rode `forge deploy` de novo.
 
-Após `forge deploy`, o container expõe uma porta no host (18000–18999). Teste no Postman:
+Após `forge deploy` (com `make builder-up` para subir Postgres), o container expõe uma porta no host (18000–18999). Teste no Postman:
 
 ```http
 GET http://localhost:<host_port>/ping
+GET http://localhost:<host_port>/db-ping
 ```
+
+`db-ping` retorna `{"ok": true}` quando o app está na rede `forge-net` com `DATABASE_URL` injetada pelo Forge.
 
 ### POC React (Vite) — browser
 

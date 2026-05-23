@@ -1,8 +1,31 @@
 services:
+  forge-postgres:
+    image: postgres:16-alpine
+    container_name: forge-postgres
+    env_file:
+      - ./server/.env
+    environment:
+      POSTGRES_USER: ${FORGE_POSTGRES_USER:-forge}
+      POSTGRES_PASSWORD: ${FORGE_POSTGRES_PASSWORD:?Set FORGE_POSTGRES_PASSWORD in server/.env}
+      POSTGRES_DB: ${FORGE_POSTGRES_DB:-forge}
+    volumes:
+      - forge-postgres-data:/var/lib/postgresql/data
+    networks:
+      - forge-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FORGE_POSTGRES_USER:-forge} -d ${FORGE_POSTGRES_DB:-forge}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   forge-builder:
     build:
       context: ./server
       dockerfile: Dockerfile
+    depends_on:
+      forge-postgres:
+        condition: service_healthy
     ports:
       - "8000:8000"
     env_file:
@@ -10,12 +33,25 @@ services:
     environment:
       FORGE_DATA_DIR: /var/lib/forge/data
       FORGE_RELOAD: "false"
+      FORGE_DOCKER_NETWORK: forge-net
+      FORGE_POSTGRES_HOST: forge-postgres
+      FORGE_POSTGRES_PORT: "5432"
+      FORGE_POSTGRES_USER: ${FORGE_POSTGRES_USER:-forge}
+      FORGE_POSTGRES_PASSWORD: ${FORGE_POSTGRES_PASSWORD:?Set FORGE_POSTGRES_PASSWORD in server/.env}
+      FORGE_POSTGRES_DB: ${FORGE_POSTGRES_DB:-forge}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - forge-data:/var/lib/forge/data
+    networks:
+      - forge-net
     restart: unless-stopped
     group_add:
       - "${DOCKER_GID:-0}"
 
+networks:
+  forge-net:
+    name: forge-net
+
 volumes:
   forge-data:
+  forge-postgres-data:

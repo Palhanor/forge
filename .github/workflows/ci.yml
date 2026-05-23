@@ -25,6 +25,9 @@ jobs:
       - name: CLI unit tests
         run: pytest cli/tests -q
 
+      - name: Server unit tests
+        run: pytest server/tests -q
+
       - name: Smoke import
         run: |
           python -c "from forge_cli.main import app; from forge_server.main import app as api"

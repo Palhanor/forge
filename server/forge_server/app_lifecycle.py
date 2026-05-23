@@ -1,4 +1,5 @@
-from forge_server.config import DEPLOYMENTS_DIR
+from forge_server.config import DEPLOYMENTS_DIR, FORGE_DOCKER_NETWORK
+from forge_server.database import build_database_url, drop_app_database
 from forge_server.docker_runner import (
     DEFAULT_CONTAINER_PORT,
     remove_container_and_image,
@@ -12,6 +13,18 @@ from forge_server.storage import (
     get_deploy_metadata,
     update_deploy_status,
 )
+
+
+def _database_runtime_from_metadata(metadata: dict, manifest: dict) -> tuple[str | None, dict[str, str] | None]:
+    if not manifest.get("database"):
+        return None, None
+
+    database_meta = metadata.get("database") or {}
+    credentials = database_meta.get("credentials")
+    if not credentials:
+        return FORGE_DOCKER_NETWORK, None
+
+    return FORGE_DOCKER_NETWORK, {"DATABASE_URL": build_database_url(credentials)}
 
 
 def stop_app(name: str) -> dict:
@@ -74,12 +87,20 @@ def start_app(name: str) -> dict:
     if source_dir.is_dir():
         env_file = resolve_env_file(source_dir, manifest)
 
+    network, extra_env = _database_runtime_from_metadata(metadata, manifest)
+    if manifest.get("database") and extra_env is None:
+        raise ValueError(
+            f"App '{name}' has database enabled but no credentials. Run 'forge deploy' again."
+        )
+
     runtime_info = start_container(
         name,
         image=image,
         host_port=int(host_port),
         container_port=int(container_port),
         env_file=env_file,
+        network=network,
+        extra_env=extra_env,
     )
 
     updates = {
@@ -104,6 +125,10 @@ def delete_app_full(name: str) -> dict:
     if not app:
         raise ValueError(f"App '{name}' not found")
 
+    deploy_id = app.get("id")
+    metadata = get_deploy_metadata(deploy_id) if deploy_id else {}
+
     remove_container_and_image(name)
+    drop_app_database(metadata)
     delete_app(name)
     return {"message": f"App '{name}' deleted permanently", "name": name}

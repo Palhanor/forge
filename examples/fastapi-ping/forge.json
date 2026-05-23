@@ -3,6 +3,7 @@
   "runtime": "python",
   "framework": "fastapi",
   "port": 8000,
+  "database": true,
   "start": "uvicorn app.main:app --host 0.0.0.0 --port 8000",
   "checks": [
     { "name": "test", "run": "pytest -q" }

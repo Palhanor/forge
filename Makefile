@@ -21,11 +21,13 @@ test:
 	.venv/bin/python -c "from forge_cli.main import app; from forge_server.main import app as api"
 	@echo "OK: cli and server import successfully"
 
+COMPOSE_ENV_FILE := --env-file server/.env
+
 builder-up:
-	docker compose up -d --build
+	docker compose $(COMPOSE_ENV_FILE) up -d --build
 
 builder-down:
-	docker compose down
+	docker compose $(COMPOSE_ENV_FILE) down
 
 builder-logs:
-	docker compose logs -f forge-builder
+	docker compose $(COMPOSE_ENV_FILE) logs -f forge-builder

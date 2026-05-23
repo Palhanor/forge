@@ -109,6 +109,9 @@ def _docker_run_args(
     container_port: int,
     image: str,
     env_file: Path | None = None,
+    *,
+    network: str | None = None,
+    extra_env: dict[str, str] | None = None,
 ) -> list[str]:
     cmd = [
         "docker",
@@ -119,8 +122,12 @@ def _docker_run_args(
         "-p",
         f"{host_port}:{container_port}",
     ]
+    if network:
+        cmd.extend(["--network", network])
     if env_file is not None:
         cmd.extend(["--env-file", str(env_file)])
+    for key, value in (extra_env or {}).items():
+        cmd.extend(["-e", f"{key}={value}"])
     cmd.append(image)
     return cmd
 
@@ -132,6 +139,8 @@ def start_container(
     host_port: int,
     container_port: int,
     env_file: Path | None = None,
+    network: str | None = None,
+    extra_env: dict[str, str] | None = None,
 ) -> dict:
     if shutil.which("docker") is None:
         raise RuntimeError("Docker is not installed or not in PATH")
@@ -157,6 +166,8 @@ def start_container(
             container_port,
             image,
             env_file,
+            network=network,
+            extra_env=extra_env,
         ),
     )
     return _runtime_info(name, port_mapping, container_port)
@@ -239,6 +250,8 @@ def _docker_build_and_run(
     source_dir: Path,
     container_port: int,
     env_file: Path | None = None,
+    network: str | None = None,
+    extra_env: dict[str, str] | None = None,
 ) -> dict:
     image_tag = image_tag_for_name(name)
     stop_existing_container(name)
@@ -255,6 +268,8 @@ def _docker_build_and_run(
             container_port,
             image_tag,
             env_file,
+            network=network,
+            extra_env=extra_env,
         ),
     )
 
@@ -268,6 +283,8 @@ def build_and_run(
     start_cmd: str,
     container_port: int = DEFAULT_CONTAINER_PORT,
     env_file: Path | None = None,
+    network: str | None = None,
+    extra_env: dict[str, str] | None = None,
 ) -> dict:
     if shutil.which("docker") is None:
         raise RuntimeError("Docker is not installed or not in PATH")
@@ -279,6 +296,8 @@ def build_and_run(
         source_dir=source_dir,
         container_port=container_port,
         env_file=env_file,
+        network=network,
+        extra_env=extra_env,
     )
 
 
@@ -289,6 +308,8 @@ def build_and_run_react(
     container_port: int = DEFAULT_REACT_PORT,
     build_cmd: str = "npm run build",
     env_file: Path | None = None,
+    network: str | None = None,
+    extra_env: dict[str, str] | None = None,
 ) -> dict:
     if shutil.which("docker") is None:
         raise RuntimeError("Docker is not installed or not in PATH")
@@ -302,6 +323,8 @@ def build_and_run_react(
         source_dir=source_dir,
         container_port=container_port,
         env_file=env_file,
+        network=network,
+        extra_env=extra_env,
     )
 
 
@@ -312,6 +335,8 @@ def build_and_run_nodejs(
     manifest: dict,
     container_port: int = DEFAULT_NODEJS_PORT,
     env_file: Path | None = None,
+    network: str | None = None,
+    extra_env: dict[str, str] | None = None,
 ) -> dict:
     if shutil.which("docker") is None:
         raise RuntimeError("Docker is not installed or not in PATH")
@@ -334,4 +359,6 @@ def build_and_run_nodejs(
         source_dir=source_dir,
         container_port=container_port,
         env_file=env_file,
+        network=network,
+        extra_env=extra_env,
     )

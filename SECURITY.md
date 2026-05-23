@@ -31,12 +31,15 @@ When self-hosting the Forge builder:
 2. **CLI config** — `~/.forge/config.json` contains your API key locally; it must stay outside the repository.
 3. **Docker socket** — The builder requires access to the Docker daemon to build and run apps. When the builder runs in a container (`docker-compose.yml`), mounting `/var/run/docker.sock` grants effective control over all containers and images on that host (equivalent to root on the Docker host). Run only on hosts you trust; isolate network access in production.
 4. **No TLS by default** — Local development uses plain HTTP. Use HTTPS (reverse proxy) before exposing the builder on the internet.
-5. **Deploy data** — `server/data/` or `FORGE_DATA_DIR` (e.g. `/var/lib/forge/data` in Compose) may contain uploaded project archives and metadata; protect filesystem permissions and backups.
+5. **Deploy data** — `server/data/` or `FORGE_DATA_DIR` (e.g. `/var/lib/forge/data` in Compose) may contain uploaded project archives and metadata, including per-app Postgres credentials when `database: true`; protect filesystem permissions and backups.
 6. **Authentication** — All builder API routes require `Authorization: Bearer <api_key>`. Use a long, random key in production.
+7. **Postgres superuser** — `FORGE_POSTGRES_PASSWORD` in `server/.env` grants admin access to all Forge-managed databases. Use a strong password; do not commit `server/.env`.
 
 ## Application environment variables (POC)
 
 When `envFile` is set in `forge.json`, the referenced file is packaged in the deploy archive and passed to the container at runtime (`docker run --env-file`). Treat these files as secrets: do not commit `.env` to git, and assume anyone with access to `server/data/` can read deployed values. This is not an encrypted secrets store.
+
+When `database: true`, Forge injects `DATABASE_URL` at deploy time (overriding the same key from `envFile` if present). Per-app database passwords are stored in deployment metadata under `FORGE_DATA_DIR`.
 
 ## Out of scope for the current POC
 
