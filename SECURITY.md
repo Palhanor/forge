@@ -29,9 +29,9 @@ When self-hosting the Forge builder:
 
 1. **API keys** — Set `FORGE_API_KEY` via environment variable on the server. Never commit real keys to git. Use `server/.env.example` as a template only.
 2. **CLI config** — `~/.forge/config.json` contains your API key locally; it must stay outside the repository.
-3. **Docker socket** — The builder requires access to the Docker daemon to build and run apps. Run only on hosts you trust; isolate network access in production.
+3. **Docker socket** — The builder requires access to the Docker daemon to build and run apps. When the builder runs in a container (`docker-compose.yml`), mounting `/var/run/docker.sock` grants effective control over all containers and images on that host (equivalent to root on the Docker host). Run only on hosts you trust; isolate network access in production.
 4. **No TLS by default** — Local development uses plain HTTP. Use HTTPS (reverse proxy) before exposing the builder on the internet.
-5. **Deploy data** — `server/data/` may contain uploaded project archives and metadata; protect filesystem permissions and backups.
+5. **Deploy data** — `server/data/` or `FORGE_DATA_DIR` (e.g. `/var/lib/forge/data` in Compose) may contain uploaded project archives and metadata; protect filesystem permissions and backups.
 6. **Authentication** — All builder API routes require `Authorization: Bearer <api_key>`. Use a long, random key in production.
 
 ## Application environment variables (POC)

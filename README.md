@@ -24,9 +24,11 @@ forge/
 ├── CONTRIBUTING.md
 ├── SECURITY.md
 ├── CHANGELOG.md
-├── Makefile        # atalho: make setup
+├── Makefile        # atalho: make setup, make builder-up
+├── docker-compose.yml  # builder em container (socket + volume)
 ├── cli/            # pacote forge-cli
 ├── server/         # API FastAPI do builder
+│   ├── Dockerfile  # imagem do forge-builder
 │   ├── forge_server/
 │   └── data/       # deploys recebidos (gerado em runtime, não versionado)
 └── examples/       # projetos de exemplo para testar deploy
@@ -209,22 +211,70 @@ Node (Next.js):
 
 **Status no registry:** `stored`, `building`, `running`, `stopped`, `failed`.
 
-## Rodar o builder local
+## Rodar o builder
 
-O builder exige a variável `FORGE_API_KEY` (mesmo valor configurado no `forge setup`):
+O builder exige `FORGE_API_KEY` (mesmo valor do `forge setup`). Referência: [`server/.env.example`](server/.env.example).
+
+**Requisito para deploy de apps:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) ou Docker Engine instalado e em execução no host. O builder orquestra containers no daemon via socket.
+
+**Frameworks suportados na POC:** `fastapi` (Python), `nodejs` (Express/servidor Node) e `react` (Vite + build estático com `serve`).
+
+### Opção A — venv (desenvolvimento)
 
 ```bash
 export FORGE_API_KEY=sua-chave-secreta
 forge-server
 ```
 
-Referência em [`server/.env.example`](server/.env.example).
+A API sobe em `http://localhost:8000`. Deploys ficam em `server/data/deployments/{id}/` (ou em `FORGE_DATA_DIR` se definido).
 
-A API sobe em `http://localhost:8000`. Os arquivos de deploy são salvos em `server/data/deployments/{id}/`.
+`FORGE_RELOAD=true` (padrão) recarrega o código ao editar. Para desativar: `FORGE_RELOAD=false forge-server`.
 
-**Requisito para deploy com container:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e em execução. O builder usa o Docker do host para build/run.
+### Opção B — container (recomendado para VPS e paridade local)
 
-**Frameworks suportados na POC:** `fastapi` (Python), `nodejs` (Express/servidor Node) e `react` (Vite + build estático com `serve`).
+O builder roda em um container com o socket do Docker montado e orquestra os apps no **host** (mesmo modelo da VPS).
+
+```bash
+cp server/.env.example server/.env
+# Edite server/.env: FORGE_API_KEY e, no Linux, DOCKER_GID (ver abaixo)
+
+make builder-up
+# ou: docker compose up -d --build
+```
+
+Configure a CLI no host:
+
+```bash
+forge setup --host http://localhost:8000 --api-key <mesma chave do server/.env>
+forge ping
+```
+
+Dados persistentes do builder: volume Docker `forge-data` em `/var/lib/forge/data` (`FORGE_DATA_DIR`).
+
+| Comando | Descrição |
+|---------|-----------|
+| `make builder-up` | Sobe o builder em background |
+| `make builder-down` | Para o builder |
+| `make builder-logs` | Logs do serviço |
+
+**Linux — permissão no socket:** se `docker` falhar com `permission denied` dentro do builder, defina em `server/.env`:
+
+```bash
+DOCKER_GID=$(getent group docker | cut -d: -f3)
+```
+
+e reinicie: `make builder-down && make builder-up`.
+
+### Builder em container na VPS
+
+1. Instale Docker Engine no servidor.
+2. Copie o repositório (ou `docker-compose.yml` + pasta `server/`).
+3. Crie `server/.env` com `FORGE_API_KEY` forte e `DOCKER_GID` (passo acima).
+4. `docker compose up -d --build`.
+5. Exponha a API atrás de reverse proxy com TLS (Caddy/Nginx); não publique `:8000` na internet sem proteção. Ver [SECURITY.md](SECURITY.md).
+6. Na máquina de desenvolvimento: `forge setup --host https://forge.seudominio.com --api-key ...`.
+
+A CLI continua rodando na sua máquina; só o builder fica na VPS.
 
 ### POC FastAPI — Postman em `/ping`
 

@@ -1,0 +1,21 @@
+services:
+  forge-builder:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./server/.env
+    environment:
+      FORGE_DATA_DIR: /var/lib/forge/data
+      FORGE_RELOAD: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - forge-data:/var/lib/forge/data
+    restart: unless-stopped
+    group_add:
+      - "${DOCKER_GID:-0}"
+
+volumes:
+  forge-data:

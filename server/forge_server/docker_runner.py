@@ -1,7 +1,6 @@
 import json
 import re
 import shutil
-import socket
 import subprocess
 from pathlib import Path
 
@@ -10,6 +9,9 @@ DEFAULT_REACT_PORT = 3000
 DEFAULT_NODEJS_PORT = 3000
 HOST_PORT_START = 18000
 HOST_PORT_END = 19000
+
+# Matches docker ps Ports: "0.0.0.0:18001->8000/tcp", "[::]:18001->8000/tcp", "18001/tcp"
+_PUBLISHED_PORT_RE = re.compile(r":(\d+)->")
 
 FASTAPI_DOCKERFILE_TEMPLATE = Path(__file__).parent / "templates" / "fastapi" / "Dockerfile"
 REACT_DOCKERFILE_TEMPLATE = Path(__file__).parent / "templates" / "react" / "Dockerfile"
@@ -25,11 +27,31 @@ def image_tag_for_name(name: str) -> str:
     return f"forge/{_safe_container_name(name)}:latest"
 
 
+def _published_host_ports() -> set[int]:
+    """Host ports published by running containers (via Docker daemon)."""
+    if shutil.which("docker") is None:
+        return set()
+
+    result = subprocess.run(
+        ["docker", "ps", "--format", "{{.Ports}}"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return set()
+
+    ports: set[int] = set()
+    for line in result.stdout.splitlines():
+        for match in _PUBLISHED_PORT_RE.finditer(line):
+            ports.add(int(match.group(1)))
+    return ports
+
+
 def find_free_host_port() -> int:
+    used = _published_host_ports()
     for port in range(HOST_PORT_START, HOST_PORT_END):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            if sock.connect_ex(("127.0.0.1", port)) != 0:
-                return port
+        if port not in used:
+            return port
     raise RuntimeError(f"No free port between {HOST_PORT_START} and {HOST_PORT_END}")
 
 
@@ -125,9 +147,8 @@ def start_container(
         return _runtime_info(name, host_port, container_port)
 
     port_mapping = host_port
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        if sock.connect_ex(("127.0.0.1", host_port)) == 0:
-            port_mapping = find_free_host_port()
+    if host_port in _published_host_ports():
+        port_mapping = find_free_host_port()
 
     _run(
         _docker_run_args(
