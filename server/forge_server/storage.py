@@ -87,6 +87,11 @@ def save_deploy(
             entry["subdomain"] = manifest["subdomain"]
         if manifest.get("database"):
             entry["database"] = True
+            if isinstance(manifest.get("database"), dict):
+                entry["database_config"] = {
+                    "variable": manifest["database"].get("variable", "DATABASE_URL"),
+                    "has_migration": bool(manifest["database"].get("migration")),
+                }
     apps.append(entry)
     _save_registry(apps)
 

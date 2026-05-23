@@ -15,3 +15,4 @@ FORGE_POSTGRES_PASSWORD = os.environ.get("FORGE_POSTGRES_PASSWORD", "")
 FORGE_POSTGRES_DB = os.environ.get("FORGE_POSTGRES_DB", "forge")
 
 POSTGRES_CONTAINER_NAME = "forge-postgres"
+FORGE_DATA_VOLUME = os.environ.get("FORGE_DATA_VOLUME", "forge_forge-data")

@@ -1,10 +1,8 @@
 from pathlib import Path
 
 from forge_server.config import FORGE_DOCKER_NETWORK
-from forge_server.database import (
-    ensure_app_database,
-    validate_manifest_database,
-)
+from forge_server.database import ensure_app_database, validate_manifest_database
+from forge_server.database_config import DatabaseConfig, parse_database_config
 from forge_server.docker_runner import (
     DEFAULT_CONTAINER_PORT,
     DEFAULT_NODEJS_PORT,
@@ -15,6 +13,7 @@ from forge_server.docker_runner import (
 )
 from forge_server.env_files import resolve_env_file
 from forge_server.extract import safe_extract_archive
+from forge_server.migrations_runner import run_migration
 from forge_server.storage import update_deploy_status
 
 SUPPORTED_FRAMEWORKS = {"fastapi", "react", "nodejs"}
@@ -24,16 +23,20 @@ def _default_fastapi_start(port: int) -> str:
     return f"uvicorn app.main:app --host 0.0.0.0 --port {port}"
 
 
-def _resolve_database_runtime(app_name: str, deploy_id: str, manifest: dict) -> tuple[str | None, dict[str, str]]:
-    if not manifest.get("database"):
-        return None, {}
+def _resolve_database_runtime(
+    app_name: str,
+    deploy_id: str,
+    manifest: dict,
+) -> tuple[str | None, dict[str, str], DatabaseConfig | None]:
+    config = validate_manifest_database(manifest)
+    if config is None:
+        return None, {}, None
 
-    validate_manifest_database(manifest)
-    extra_env = ensure_app_database(app_name, deploy_id)
-    return FORGE_DOCKER_NETWORK, extra_env
+    extra_env = ensure_app_database(app_name, deploy_id, config)
+    return FORGE_DOCKER_NETWORK, extra_env, config
 
 
-def run_deploy(deploy_id: str, metadata: dict) -> dict:
+def run_deploy(deploy_id: str, metadata: dict, *, run_migrate: bool = False) -> dict:
     manifest = metadata.get("manifest") or {}
     framework = manifest.get("framework")
 
@@ -54,7 +57,21 @@ def run_deploy(deploy_id: str, metadata: dict) -> dict:
     try:
         source_dir = safe_extract_archive(archive_path, deploy_dir)
         env_file = resolve_env_file(source_dir, manifest)
-        network, extra_env = _resolve_database_runtime(app_name, deploy_id, manifest)
+        network, extra_env, db_config = _resolve_database_runtime(
+            app_name, deploy_id, manifest
+        )
+
+        if run_migrate:
+            if db_config is None or not db_config.migration:
+                raise ValueError(
+                    "Deploy with migrate requires 'database.migration' in forge.json"
+                )
+            run_migration(
+                source_dir=source_dir,
+                command=db_config.migration,
+                env=extra_env,
+                framework=framework,
+            )
 
         run_kwargs = {
             "name": app_name,
@@ -99,7 +116,7 @@ def run_deploy(deploy_id: str, metadata: dict) -> dict:
             "image": runtime_info["image"],
             "error": None,
         }
-        if manifest.get("database"):
+        if parse_database_config(manifest):
             updates["database_enabled"] = True
         update_deploy_status(deploy_id, app_name, **updates)
         return {**metadata, **updates}

@@ -17,6 +17,7 @@ from forge_server.config import (
     FORGE_POSTGRES_USER,
     POSTGRES_CONTAINER_NAME,
 )
+from forge_server.database_config import DatabaseConfig, parse_database_config
 from forge_server.storage import get_deploy_metadata, update_deploy_status
 
 _IDENTIFIER_RE = re.compile(r"[^a-z0-9_]")
@@ -97,12 +98,29 @@ def check_postgres_available() -> None:
         ) from exc
 
 
-def _save_database_metadata(deploy_id: str, app_name: str, database_meta: dict) -> None:
+def _save_database_metadata(
+    deploy_id: str,
+    app_name: str,
+    database_meta: dict,
+    *,
+    config: DatabaseConfig,
+) -> None:
     metadata_path = DEPLOYMENTS_DIR / deploy_id / "metadata.json"
     metadata = get_deploy_metadata(deploy_id)
+    database_meta["config"] = {
+        "variable": config.variable,
+        "migration": config.migration,
+    }
     metadata["database"] = database_meta
     metadata_path.write_text(json.dumps(metadata, indent=2))
     update_deploy_status(deploy_id, app_name, database_enabled=True)
+
+
+def build_extra_env_for_credentials(
+    credentials: dict,
+    config: DatabaseConfig,
+) -> dict[str, str]:
+    return {config.variable: build_database_url(credentials)}
 
 
 def _role_exists(conn: psycopg.Connection, name: str) -> bool:
@@ -119,15 +137,19 @@ def _database_exists(conn: psycopg.Connection, name: str) -> bool:
     return row is not None
 
 
-def ensure_app_database(app_name: str, deploy_id: str) -> dict[str, str]:
-    """Provision or reuse per-app database; returns extra_env with DATABASE_URL."""
+def ensure_app_database(
+    app_name: str,
+    deploy_id: str,
+    config: DatabaseConfig,
+) -> dict[str, str]:
+    """Provision or reuse per-app database; returns extra_env for docker run."""
     check_postgres_available()
 
     metadata = get_deploy_metadata(deploy_id)
     existing = metadata.get("database") or {}
     credentials = existing.get("credentials")
     if credentials:
-        return {"DATABASE_URL": build_database_url(credentials)}
+        return build_extra_env_for_credentials(credentials, config)
 
     db_name = database_name_for_app(app_name)
     db_user = db_name
@@ -171,9 +193,9 @@ def ensure_app_database(app_name: str, deploy_id: str) -> dict[str, str]:
         "port": FORGE_POSTGRES_PORT,
     }
     database_meta = {"credentials": credentials}
-    _save_database_metadata(deploy_id, app_name, database_meta)
+    _save_database_metadata(deploy_id, app_name, database_meta, config=config)
 
-    return {"DATABASE_URL": build_database_url(credentials)}
+    return build_extra_env_for_credentials(credentials, config)
 
 
 def drop_app_database(metadata: dict) -> None:
@@ -206,9 +228,10 @@ def drop_app_database(metadata: dict) -> None:
         pass
 
 
-def validate_manifest_database(manifest: dict) -> None:
-    if not manifest.get("database"):
-        return
+def validate_manifest_database(manifest: dict) -> DatabaseConfig | None:
+    config = parse_database_config(manifest)
+    if config is None:
+        return None
     framework = manifest.get("framework")
     if framework in ("react", "next"):
         raise ValueError(
@@ -219,3 +242,4 @@ def validate_manifest_database(manifest: dict) -> None:
         raise ValueError(
             "Forge database requires a server framework (fastapi, nodejs, or script)."
         )
+    return config

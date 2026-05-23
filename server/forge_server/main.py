@@ -25,6 +25,7 @@ async def deploy(
     name: str = Form(...),
     source_path: str = Form(...),
     manifest: str | None = Form(None),
+    migrate: str = Form("false"),
 ):
     content = await archive.read()
     if not content:
@@ -59,7 +60,8 @@ async def deploy(
     )
 
     try:
-        result = run_deploy(metadata["id"], metadata)
+        run_migrate = migrate.strip().lower() in ("true", "1", "yes")
+        result = run_deploy(metadata["id"], metadata, run_migrate=run_migrate)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:

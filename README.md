@@ -10,6 +10,7 @@ Repositório da plataforma **Forge**. A CLI fica em `cli/`, o builder (API FastA
 | **Contributing** | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | **Security** | [SECURITY.md](SECURITY.md) |
 | **Changelog** | [CHANGELOG.md](CHANGELOG.md) |
+| **Roadmap** | [docs/ROADMAP.md](docs/ROADMAP.md) |
 
 > **Never commit** `server/.env`, `server/data/`, or real API keys. Use `server/.env.example` and `forge setup` locally. See [SECURITY.md](SECURITY.md).
 
@@ -24,6 +25,8 @@ forge/
 ├── CONTRIBUTING.md
 ├── SECURITY.md
 ├── CHANGELOG.md
+├── docs/
+│   └── ROADMAP.md  # estabilização, VPS e próximas features
 ├── Makefile        # atalho: make setup, make builder-up
 ├── docker-compose.yml  # builder em container (socket + volume)
 ├── cli/            # pacote forge-cli
@@ -35,6 +38,7 @@ forge/
     ├── fastapi-ping/
     ├── nodejs-ping/       # Node.js (JavaScript)
     ├── nodejs-ping-ts/    # Node.js (TypeScript)
+    ├── nodejs-notes/      # Node.js + Prisma + Postgres (POST/GET /notes)
     └── react-example/
 ```
 
@@ -138,7 +142,7 @@ Cada projeto deployável precisa de um `forge.json` na raiz. A CLI valida o arqu
 | `build` | não | Comando de build (Node/React/Next) |
 | `subdomain` | não | Subdomínio futuro (slug; default = `name`) |
 | `envFile` | não | Caminho relativo a um arquivo de env (ex.: `.env`) incluído no deploy e injetado no container via `docker run --env-file` |
-| `database` | não | Se `true`, o Forge provisiona Postgres dedicado ao app, injeta `DATABASE_URL` e anexa o container à rede `forge-net` (requer stack Compose com `forge-postgres`) |
+| `database` | não | `true` ou objeto `{ "variable": "DATABASE_URL", "migration": "..." }` — Postgres dedicado por app, env injetada na rede `forge-net` (requer `make builder-up`) |
 | `checks` | não | Lista de validações locais (lint, test, etc.) executadas na CLI antes do empacotamento; ver abaixo |
 
 **`checks` (CI/CD local):** array de objetos `{ "name": "<slug>", "run": "<comando shell>" }`, executados em ordem no diretório do projeto. Se algum check falhar, `forge deploy` e `forge validate` abortam antes do upload. Os comandos usam o ambiente local (venv, `node_modules`, etc.) — instale as dependências de test/lint antes do deploy. Use `--skip-checks` para pular.
@@ -181,6 +185,25 @@ Python (FastAPI):
 
 Com `"database": true`, o app recebe `DATABASE_URL` apontando para o Postgres do Forge (`forge-postgres` na rede interna). Não use com `react`/`next`.
 
+Node (Prisma + migrations):
+
+```json
+{
+  "name": "nodejs-notes",
+  "runtime": "node",
+  "framework": "nodejs",
+  "port": 3000,
+  "database": {
+    "variable": "DATABASE_URL",
+    "migration": "npm ci && npx prisma migrate deploy"
+  },
+  "build": "npx prisma generate && npm run build",
+  "start": "node dist/index.js"
+}
+```
+
+Deploy com migrations: `forge deploy --migrate` (exige `database.migration` no manifesto).
+
 Node (Next.js):
 
 ```json
@@ -206,6 +229,7 @@ Node (Next.js):
 | `forge ping` | Verifica conectividade com o builder (autenticado) |
 | `forge deploy` | Valida `forge.json`, roda `checks`, empacota e envia para `{host}/deploy` |
 | `forge deploy --skip-checks` | Deploy sem executar `checks` |
+| `forge deploy --migrate` | Executa `database.migration` antes do build (Postgres + comando no `forge.json`) |
 | `forge deploy -n outro-nome` | Sobrescreve o `name` do `forge.json` |
 | `forge list` | Lista apps via `GET {host}/apps` |
 | `forge stop <name>` | Para o container (status `stopped`; dados e imagem permanecem) |
@@ -373,6 +397,26 @@ Com `envFile: ".env"`, o endpoint `/ping` retorna `process.env.PING_MESSAGE` (ex
 
 ```http
 GET http://localhost:<host_port>/ping
+```
+
+### POC Node.js + Postgres/Prisma — `nodejs-notes`
+
+Exemplo em [`examples/nodejs-notes/`](examples/nodejs-notes/): API com Prisma, migrations no deploy e persistência.
+
+```bash
+make builder-up
+cd examples/nodejs-notes
+forge deploy --migrate --skip-checks
+```
+
+Teste (substitua `<host_port>` pela porta retornada):
+
+```bash
+curl -X POST http://localhost:<host_port>/notes \
+  -H 'Content-Type: application/json' \
+  -d '{"key":"greeting","value":"hello-forge"}'
+
+curl http://localhost:<host_port>/notes/greeting
 ```
 
 ### Rodar vários apps ao mesmo tempo

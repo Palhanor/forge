@@ -39,6 +39,7 @@ services:
       FORGE_POSTGRES_USER: ${FORGE_POSTGRES_USER:-forge}
       FORGE_POSTGRES_PASSWORD: ${FORGE_POSTGRES_PASSWORD:?Set FORGE_POSTGRES_PASSWORD in server/.env}
       FORGE_POSTGRES_DB: ${FORGE_POSTGRES_DB:-forge}
+      FORGE_DATA_VOLUME: forge_forge-data
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - forge-data:/var/lib/forge/data

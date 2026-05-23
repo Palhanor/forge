@@ -75,6 +75,60 @@ def _validate_checks_field(checks: object) -> list[str]:
     return errors
 
 
+def _validate_database_field(data: dict) -> list[str]:
+    errors: list[str] = []
+    database = data.get("database")
+    if database is None:
+        return errors
+
+    framework = data.get("framework")
+
+    if database is True:
+        if isinstance(framework, str) and framework in ("react", "next"):
+            errors.append(
+                f"'database' is not supported for framework '{framework}'. "
+                "Use fastapi or nodejs."
+            )
+        return errors
+
+    if not isinstance(database, dict):
+        errors.append("'database' must be true or an object with 'variable' and optional 'migration'")
+        return errors
+
+    variable = database.get("variable", "DATABASE_URL")
+    if not isinstance(variable, str) or not variable.strip():
+        errors.append("'database.variable' must be a non-empty string")
+
+    migration = database.get("migration")
+    if migration is not None and (not isinstance(migration, str) or not migration.strip()):
+        errors.append("'database.migration' must be a non-empty string when provided")
+
+    if isinstance(framework, str) and framework in ("react", "next"):
+        errors.append(
+            f"'database' is not supported for framework '{framework}'. "
+            "Use fastapi or nodejs."
+        )
+
+    return errors
+
+
+def validate_migrate_flag(manifest: dict, run_migrate: bool) -> None:
+    if not run_migrate:
+        return
+    database = manifest.get("database")
+    migration = None
+    if database is True:
+        pass
+    elif isinstance(database, dict):
+        migration = database.get("migration")
+    if not migration or not str(migration).strip():
+        typer.secho(
+            "✗ --migrate requires 'database.migration' in forge.json",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
+
 def _validate_env_file_field(env_file: str) -> list[str]:
     errors: list[str] = []
     if not env_file.strip():
@@ -149,17 +203,7 @@ def validate_forge_manifest(data: dict, *, project_root: Path | None = None) -> 
     if checks is not None:
         errors.extend(_validate_checks_field(checks))
 
-    database = data.get("database")
-    if database is not None:
-        if not isinstance(database, bool):
-            errors.append("'database' must be a boolean when provided")
-        elif database is True:
-            framework = data.get("framework")
-            if isinstance(framework, str) and framework in ("react", "next"):
-                errors.append(
-                    f"'database' is not supported for framework '{framework}'. "
-                    "Use fastapi or nodejs."
-                )
+    errors.extend(_validate_database_field(data))
 
     if errors:
         typer.secho(f"✗ Invalid {FORGE_JSON}:", fg=typer.colors.RED)

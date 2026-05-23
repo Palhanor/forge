@@ -1,5 +1,6 @@
 from forge_server.config import DEPLOYMENTS_DIR, FORGE_DOCKER_NETWORK
-from forge_server.database import build_database_url, drop_app_database
+from forge_server.database import build_extra_env_for_credentials, drop_app_database
+from forge_server.database_config import DatabaseConfig, parse_database_config
 from forge_server.docker_runner import (
     DEFAULT_CONTAINER_PORT,
     remove_container_and_image,
@@ -15,8 +16,27 @@ from forge_server.storage import (
 )
 
 
-def _database_runtime_from_metadata(metadata: dict, manifest: dict) -> tuple[str | None, dict[str, str] | None]:
-    if not manifest.get("database"):
+def _database_config_from_metadata(metadata: dict, manifest: dict) -> DatabaseConfig | None:
+    config = parse_database_config(manifest)
+    if config is None:
+        return None
+
+    stored = (metadata.get("database") or {}).get("config") or {}
+    if stored.get("variable"):
+        return DatabaseConfig(
+            enabled=True,
+            variable=stored["variable"],
+            migration=stored.get("migration"),
+        )
+    return config
+
+
+def _database_runtime_from_metadata(
+    metadata: dict,
+    manifest: dict,
+) -> tuple[str | None, dict[str, str] | None]:
+    config = _database_config_from_metadata(metadata, manifest)
+    if config is None:
         return None, None
 
     database_meta = metadata.get("database") or {}
@@ -24,7 +44,7 @@ def _database_runtime_from_metadata(metadata: dict, manifest: dict) -> tuple[str
     if not credentials:
         return FORGE_DOCKER_NETWORK, None
 
-    return FORGE_DOCKER_NETWORK, {"DATABASE_URL": build_database_url(credentials)}
+    return FORGE_DOCKER_NETWORK, build_extra_env_for_credentials(credentials, config)
 
 
 def stop_app(name: str) -> dict:
@@ -88,7 +108,7 @@ def start_app(name: str) -> dict:
         env_file = resolve_env_file(source_dir, manifest)
 
     network, extra_env = _database_runtime_from_metadata(metadata, manifest)
-    if manifest.get("database") and extra_env is None:
+    if parse_database_config(manifest) and extra_env is None:
         raise ValueError(
             f"App '{name}' has database enabled but no credentials. Run 'forge deploy' again."
         )

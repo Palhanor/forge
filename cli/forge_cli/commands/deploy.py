@@ -11,7 +11,7 @@ from forge_cli.client import (
     get_builder_host,
     handle_request_error,
 )
-from forge_cli.manifest import load_forge_json
+from forge_cli.manifest import load_forge_json, validate_migrate_flag
 
 DEPLOY_TIMEOUT = 600.0
 
@@ -28,10 +28,16 @@ def deploy(
         "--skip-checks",
         help="Skip pre-deploy checks declared in forge.json.",
     ),
+    migrate: bool = typer.Option(
+        False,
+        "--migrate",
+        help="Run database.migration from forge.json before build (requires database config).",
+    ),
 ):
     """Package the current project as .tar.gz and upload it to the Forge builder."""
     project_root = Path.cwd()
     manifest = load_forge_json(project_root)
+    validate_migrate_flag(manifest, migrate)
     app_name = name or manifest["name"]
     host = get_builder_host()
 
@@ -60,6 +66,7 @@ def deploy(
                     "name": app_name,
                     "source_path": str(project_root),
                     "manifest": json.dumps(manifest),
+                    "migrate": "true" if migrate else "false",
                 },
                 timeout=DEPLOY_TIMEOUT,
             )
@@ -75,8 +82,13 @@ def deploy(
             typer.echo(f"  status: {status}")
         if url := data.get("url"):
             typer.echo(f"  url: {url}")
-            if manifest.get("framework") in ("fastapi", "nodejs"):
+            if manifest.get("framework") == "fastapi":
                 typer.echo(f"  try: GET {url}/ping")
+            elif manifest.get("framework") == "nodejs":
+                if app_name == "nodejs-notes":
+                    typer.echo(f"  try: POST {url}/notes  and  GET {url}/notes/<key>")
+                else:
+                    typer.echo(f"  try: GET {url}/ping")
             elif manifest.get("framework") == "react":
                 typer.echo(f"  try: open {url} in your browser")
 

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Forge Postgres in Docker Compose (`forge-postgres`, `forge-net`, per-app database).
+- `database` in `forge.json` as `true` or `{ variable, migration }`; `forge deploy --migrate`.
+- Example `examples/nodejs-notes` (Prisma, POST/GET `/notes`).
 - Initial open-source release: CLI, builder API, examples (FastAPI, Node.js JS/TS, React).
 - Commands: `setup`, `validate`, `deploy`, `list`, `stop`, `start`, `delete`, `ping`, `version`.
 - Framework support: `fastapi`, `nodejs` (JavaScript and TypeScript), `react` (Vite).
